@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>二位小數互動教具</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 觸控與白板體驗最佳化：禁止文字反白與手勢縮放干擾 */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+    /* 觸控拖曳軌道與畫布 */
+    .touch-track, .touch-canvas {
+      touch-action: none;
+    }
+    /* 真實直尺與百格板溫潤淡黃材質 (統一風格) */
+    .ruler-wood {
+      background-color: #FEF9E7;
+      border: 2px solid #FDE68A;
+      box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.8), 0 4px 12px rgba(217, 119, 6, 0.08);
+    }
+    .micro-ruler-wood {
+      background-color: #FEF9E7;
+      border: 3px solid #FCD34D;
+      box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.9), 0 8px 24px rgba(217, 119, 6, 0.12);
+    }
+    .grid-board-wood {
+      background-color: #FEF9E7;
+      border: 3px solid #FDE68A;
+      box-shadow: inset 0 2px 6px rgba(255, 255, 255, 0.8), 0 10px 28px rgba(217, 119, 6, 0.1);
+    }
+    /* 紅色指針針尖倒三角 */
+    .needle-tip {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 10px solid #EF4444;
+    }
+    /* 百格板小格樣式 */
+    .grid-cell-empty {
+      background-color: #FEF9E7;
+      border: 1px solid #E2E8F0;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .grid-cell-orange {
+      background-color: #F97316;
+      border: 1px solid #EA580C;
+      box-shadow: 0 1px 2px rgba(249, 115, 22, 0.3);
+    }
+    .grid-strip-blue {
+      background-color: #2563EB;
+      border: 1px solid #1D4ED8;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 select-none relative overflow-x-hidden">
+
+  <!-- 頂部切換導航列與常駐重置鈕 -->
+  <header class="w-full max-w-4xl flex items-center justify-between gap-3 mb-3 sm:mb-4 px-1 z-20">
+    
+    <!-- 雙教具切換標籤 (直尺放大鏡 ⇋ 10x10 百格板) -->
+    <nav class="flex items-center gap-1.5 sm:gap-2 bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300">
+      
+      <!-- [🔍 直尺放大鏡] -->
+      <button id="tab-btn-ruler" onclick="switchToolTab('ruler')" class="h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all shadow-sm bg-white text-blue-700">
+        <span class="text-xl">🔍</span>
+        <span>直尺放大鏡</span>
+      </button>
+
+      <!-- [🧱 10×10 百格板] -->
+      <button id="tab-btn-grid" onclick="switchToolTab('grid')" class="h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900">
+        <span class="text-xl">🧱</span>
+        <span>10×10 百格板</span>
+      </button>
+
+    </nav>
+
+    <!-- 右上角常駐：淺灰圓形 [🔄 重置] 按鈕 -->
+    <button onclick="resetCurrentTool()" class="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white hover:bg-slate-50 active:bg-slate-100 border-2 border-slate-200 hover:border-slate-300 text-slate-600 flex items-center justify-center text-xl sm:text-2xl shadow-sm active:scale-95 transition-all shrink-0" title="清空重置">
+      🔄
+    </button>
+
+  </header>
+
+
+  <!-- ======================================================== -->
+  <!-- 教具 1：二位小數直尺放大鏡 (Ruler Magnifier Tool) -->
+  <!-- ======================================================== -->
+  <div id="view-ruler" class="w-full max-w-4xl flex flex-col items-center gap-3 sm:gap-4 relative">
+    
+    <!-- 1. 上方卡片（一般直尺 Macro Ruler） -->
+    <section class="w-full bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-lg border border-slate-200/80 relative">
+      
+      <!-- 尺頂數字標示 (20.0 與 21.0 綠色字，中間 20.5 與 20.6 藍色標註) -->
+      <div class="flex items-center justify-between font-mono font-black text-lg sm:text-2xl mb-2 px-1">
+        <span class="text-[#10B981]">20.0</span>
+        <div class="flex items-center gap-6 sm:gap-10 text-sm sm:text-base font-bold text-[#2563EB]">
+          <span>20.5</span>
+          <span>20.6</span>
+        </div>
+        <span class="text-[#10B981]">21.0</span>
+      </div>
+
+      <!-- 一般直尺本體 (Macro Ruler Track) -->
+      <div class="w-full h-20 sm:h-24 ruler-wood rounded-2xl p-2 relative flex items-start overflow-visible">
+        
+        <!-- 刻度容器 (由 JS 動態生成 20.0 ~ 21.0 的公釐與公分刻度) -->
+        <div id="macro-ticks" class="w-full h-full relative"></div>
+
+        <!-- 放大選取框 (20.5 ~ 20.6 區間，半透明藍色圓角選取框) -->
+        <div id="macro-selection-box" class="absolute top-0 bottom-0 left-[50%] w-[10%] bg-blue-500/20 border-2 border-blue-500 rounded-xl flex items-center justify-center shadow-md transition-all pointer-events-none">
+          <div class="absolute -top-4 sm:-top-5 px-2.5 py-0.5 rounded-full bg-blue-600 text-white font-mono font-black text-[10px] sm:text-xs shadow-md whitespace-nowrap flex items-center gap-1">
+            <span>20.5</span>
+            <span class="text-xs">🔍</span>
+            <span>20.6</span>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- 連接導引線與放大光束投影錐 (SVG) -->
+    <div class="w-full h-8 sm:h-12 relative pointer-events-none -my-2 z-0">
+      <svg id="projection-svg" class="w-full h-full overflow-visible">
+        <defs>
+          <linearGradient id="projectionGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.22" />
+            <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.04" />
+          </linearGradient>
+        </defs>
+        <polygon id="projection-polygon" fill="url(#projectionGradient)" points="0,0 0,0 0,0 0,0" />
+        <line id="projection-line-left" stroke="#3B82F6" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.6" x1="0" y1="0" x2="0" y2="0" />
+        <line id="projection-line-right" stroke="#3B82F6" stroke-width="2" stroke-dasharray="4 4" stroke-opacity="0.6" x1="0" y1="0" x2="0" y2="0" />
+      </svg>
+    </div>
+
+    <!-- 2. 下方卡片（微距放大尺 Micro Ruler） -->
+    <section class="w-full bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-xl border-2 border-blue-100 relative flex flex-col gap-5 sm:gap-6 z-10">
+      
+      <!-- 頂部資訊列 (顯微鏡圖示、大字型數值框、20.60) -->
+      <div class="flex items-center justify-between w-full px-1">
+        
+        <!-- 左側：顯微鏡圖示 🔬 + 藍色文字「20.50」 -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <span class="text-2xl sm:text-3xl">🔬</span>
+          <span class="text-[#2563EB] font-mono font-black text-lg sm:text-2xl tracking-tight">20.50</span>
+        </div>
+
+        <!-- 正中央：大字型動態數值框「20 . 5 [ 4 ]」 -->
+        <div class="flex items-center gap-1 sm:gap-1.5 font-mono font-black bg-slate-50/80 px-4 sm:px-6 py-2 sm:py-3 rounded-2xl border-2 border-slate-200/80 shadow-inner">
+          <span class="text-[#10B981] text-3xl sm:text-5xl">20</span>
+          <span class="text-[#EF4444] text-3xl sm:text-5xl -mx-0.5">•</span>
+          <span id="display-ruler-tenths" class="text-[#2563EB] text-3xl sm:text-5xl">5</span>
+          
+          <div class="bg-orange-100 border-2 border-orange-300 rounded-xl px-2.5 sm:px-3.5 py-0.5 sm:py-1 ml-1 flex items-center justify-center shadow-xs">
+            <span id="display-ruler-hundredths" class="text-[#F97316] text-3xl sm:text-5xl">4</span>
+          </div>
+        </div>
+
+        <!-- 右側：藍色文字「20.60」 -->
+        <div class="flex items-center">
+          <span class="text-[#2563EB] font-mono font-black text-lg sm:text-2xl tracking-tight">20.60</span>
+        </div>
+
+      </div>
+
+      <!-- 放大直尺本體與左右微調箭頭 (◀ 與 ▶) -->
+      <div class="w-full flex items-center gap-2 sm:gap-4">
+        
+        <!-- 左側微調按鈕：◀ (減 0.01) -->
+        <button id="btn-ruler-prev" onclick="stepRulerValue(-1)" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-100 hover:bg-blue-50 active:bg-blue-100 border-2 border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex items-center justify-center text-xl sm:text-2xl font-black shadow-sm active:scale-95 transition-all shrink-0" title="減少 0.01">
+          ◀
+        </button>
+
+        <!-- 微距直尺本體容器 (Micro Ruler Body) -->
+        <div id="micro-ruler-container" class="flex-1 h-32 sm:h-36 micro-ruler-wood rounded-2xl relative touch-track cursor-pointer px-4 sm:px-8 py-2 flex flex-col justify-between overflow-visible">
+          
+          <div id="micro-ticks-wrapper" class="w-full h-full relative">
+            <div id="micro-ticks-marks" class="w-full h-full relative pointer-events-none"></div>
+
+            <!-- 紅色互動指針 -->
+            <div id="pointer-needle-group" class="absolute top-0 w-8 -ml-4 h-full pointer-events-none transition-all duration-150 flex flex-col items-center z-20" style="left: 40%;">
+              <div id="pointer-pin" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-red-500 border-2 border-white shadow-lg flex items-center justify-center pointer-events-auto cursor-grab active:cursor-grabbing hover:scale-110 active:scale-125 transition-transform shrink-0 -mt-2.5">
+                <div class="w-2.5 h-2.5 rounded-full bg-white/90 shadow-inner"></div>
+              </div>
+              <div class="w-1 flex-1 bg-red-500 shadow-sm"></div>
+              <div class="needle-tip -mt-0.5"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 右側微調按鈕：▶ (加 0.01) -->
+        <button id="btn-ruler-next" onclick="stepRulerValue(1)" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-100 hover:bg-blue-50 active:bg-blue-100 border-2 border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 flex items-center justify-center text-xl sm:text-2xl font-black shadow-sm active:scale-95 transition-all shrink-0" title="增加 0.01">
+          ▶
+        </button>
+
+      </div>
+
+    </section>
+
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- 教具 2：10x10 虛擬積木與位值 (10x10 Grid Blocks Tool) -->
+  <!-- ======================================================== -->
+  <div id="view-grid" class="hidden w-full max-w-2xl bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-xl border border-slate-200/80 flex-col items-center gap-5 sm:gap-7 relative">
+    
+    <!-- 1. 核心數值看板（正上方）「 0 . 0 [ 0 ] 」 -->
+    <section class="flex flex-col items-center mt-1">
+      <div class="flex items-center gap-1 sm:gap-2 font-mono font-black bg-slate-50/80 px-5 sm:px-8 py-2.5 sm:py-3.5 rounded-2xl border-2 border-slate-200/80 shadow-inner">
+        <!-- 個位 綠色 -->
+        <span id="display-grid-ones" class="text-[#10B981] text-4xl sm:text-6xl">0</span>
+        
+        <!-- 小數點 紅色 -->
+        <span class="text-[#EF4444] text-4xl sm:text-6xl -mx-0.5 sm:-mx-1">•</span>
+        
+        <!-- 十分位 藍色 -->
+        <span id="display-grid-tenths" class="text-[#2563EB] text-4xl sm:text-6xl">0</span>
+        
+        <!-- 百分位 橘色方塊包裹 -->
+        <div id="display-grid-hundredths-box" class="bg-orange-100 border-2 border-orange-300 rounded-xl px-2.5 sm:px-4 py-0.5 sm:py-1 ml-1 flex items-center justify-center shadow-xs transition-all duration-200">
+          <span id="display-grid-hundredths" class="text-[#F97316] text-4xl sm:text-6xl">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 10x10 大正方形積木板（中央） -->
+    <section class="w-full flex justify-center items-center">
+      <div class="grid-board-wood rounded-2xl p-2.5 sm:p-4 relative touch-canvas">
+        <div id="grid-cells-container" class="grid grid-cols-10 gap-1 sm:gap-1.5 w-[310px] h-[310px] sm:w-[410px] sm:h-[410px] cursor-pointer">
+          <!-- 由 JS 生成 10 條，每條 10 個小格 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 底部極簡功能鍵（僅 2 個大按鈕） -->
+    <section class="w-full flex items-center justify-center gap-3 sm:gap-5">
+      <!-- [ 0.10 ⇋ 0.1 ] 切換末尾 0 半透明隱藏 -->
+      <button id="btn-grid-toggle-zero" onclick="toggleGridTrailingZero()" class="flex-1 max-w-[200px] h-13 sm:h-14 px-4 rounded-2xl bg-white border-2 border-slate-300 hover:border-blue-400 font-mono font-black text-sm sm:text-base text-slate-700 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all" title="切換末尾零隱藏">
+        <span>0.10</span>
+        <span class="text-slate-400 font-normal">⇋</span>
+        <span class="text-[#2563EB]">0.1</span>
+      </button>
+
+      <!-- [ + 0.01 ] 快速增加一格 -->
+      <button onclick="addGridOneCell()" class="flex-1 max-w-[200px] h-13 sm:h-14 px-4 rounded-2xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-mono font-black text-base sm:text-lg flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all" title="增加一格">
+        <span class="text-xl">+</span>
+        <span>0.01</span>
+      </button>
+    </section>
+
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- 核心 JavaScript：分頁路由、直尺微距、百格板連動與音效 -->
+  <!-- ======================================================== -->
+  <script>
+    /**
+     * ==========================================
+     * 1. 全域狀態管理 (State)
+     * ==========================================
+     */
+    const state = {
+      activeTool: 'ruler', // 'ruler' | 'grid'
+      
+      // 直尺放大鏡狀態
+      ruler: {
+        index: 4, // 預設停在 .54 (0~10 代表 .50 ~ .60)
+        isDragging: false
+      },
+
+      // 10x10 百格板狀態
+      grid: {
+        cells: new Array(100).fill(false),
+        hideTrailingZero: false,
+        isDragging: false,
+        dragTargetValue: true
+      }
+    };
+
+    /**
+     * ==========================================
+     * 2. 即時音效引擎 (Web Audio API)
+     * ==========================================
+     */
+    let audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playSound(type) {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        if (type === 'tick') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(620, now);
+          osc.frequency.exponentialRampToValueAtTime(380, now + 0.035);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.04);
+        } else if (type === 'cell') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(580, now);
+          osc.frequency.exponentialRampToValueAtTime(360, now + 0.035);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.04);
+        } else if (type === 'strip') {
+          [523.25, 659.25, 783.99].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + i * 0.04);
+            gain.gain.setValueAtTime(0.14, now + i * 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.18);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.04);
+            osc.stop(now + i * 0.04 + 0.2);
+          });
+        } else if (type === 'reset') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(720, now);
+          osc.frequency.exponentialRampToValueAtTime(260, now + 0.12);
+          gain.gain.setValueAtTime(0.15, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.14);
+        }
+      } catch (e) {}
+    }
+
+    /**
+     * ==========================================
+     * 3. 雙教具切換與重置
+     * ==========================================
+     */
+    function switchToolTab(toolId) {
+      state.activeTool = toolId;
+      playSound('tick');
+
+      const btnRuler = document.getElementById('tab-btn-ruler');
+      const btnGrid = document.getElementById('tab-btn-grid');
+      const viewRuler = document.getElementById('view-ruler');
+      const viewGrid = document.getElementById('view-grid');
+
+      if (toolId === 'ruler') {
+        btnRuler.className = 'h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all shadow-sm bg-white text-blue-700';
+        btnGrid.className = 'h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900';
+        viewRuler.classList.remove('hidden');
+        viewRuler.classList.add('flex');
+        viewGrid.classList.add('hidden');
+        viewGrid.classList.remove('flex');
+        
+        // 重新校正投影線
+        requestAnimationFrame(updateRulerProjectionLines);
+      } else {
+        btnGrid.className = 'h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all shadow-sm bg-white text-blue-700';
+        btnRuler.className = 'h-11 px-4 sm:h-12 sm:px-6 rounded-xl font-black text-sm sm:text-base flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900';
+        viewGrid.classList.remove('hidden');
+        viewGrid.classList.add('flex');
+        viewRuler.classList.add('hidden');
+        viewRuler.classList.remove('flex');
+      }
+    }
+
+    function resetCurrentTool() {
+      playSound('reset');
+      if (state.activeTool === 'ruler') {
+        updateRulerState(4, false);
+      } else {
+        state.grid.cells.fill(false);
+        state.grid.hideTrailingZero = false;
+        const btn = document.getElementById('btn-grid-toggle-zero');
+        btn.innerHTML = '<span>0.10</span><span class="text-slate-400 font-normal">⇋</span><span class="text-[#2563EB]">0.1</span>';
+        btn.className = 'flex-1 max-w-[200px] h-13 sm:h-14 px-4 rounded-2xl bg-white border-2 border-slate-300 hover:border-blue-400 font-mono font-black text-sm sm:text-base text-slate-700 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all';
+        renderGridUI();
+      }
+    }
+
+    /**
+     * ==========================================
+     * 4. 直尺放大鏡邏輯 (Ruler Logic)
+     * ==========================================
+     */
+    const rulerTickLabels = ['.50', '.51', '.52', '.53', '.54', '.55', '.56', '.57', '.58', '.59', '.60'];
+
+    function initRulerModule() {
+      // 1. 渲染 Macro Ruler 刻度 (20.0 ~ 21.0)
+      const macroContainer = document.getElementById('macro-ticks');
+      macroContainer.innerHTML = '';
+      for (let i = 0; i <= 100; i++) {
+        const tick = document.createElement('div');
+        let heightClass = 'h-3 sm:h-4 bg-slate-400/80 w-[1px]';
+        if (i % 10 === 0) heightClass = 'h-8 sm:h-10 bg-slate-800 w-[1.5px] sm:w-[2px]';
+        else if (i % 5 === 0) heightClass = 'h-5 sm:h-6 bg-slate-600 w-[1px] sm:w-[1.5px]';
+        tick.className = `absolute top-0 ${heightClass} -translate-x-1/2`;
+        tick.style.left = `${i}%`;
+        macroContainer.appendChild(tick);
+      }
+
+      // 2. 渲染 Micro Ruler 刻度 (.50 ~ .60)
+      const microMarks = document.getElementById('micro-ticks-marks');
+      microMarks.innerHTML = '';
+      for (let i = 0; i <= 10; i++) {
+        const percent = i * 10;
+        const isMajor = (i === 0 || i === 5 || i === 10);
+
+        const tickLine = document.createElement('div');
+        tickLine.id = `micro-tick-line-${i}`;
+        const tickHeight = isMajor ? 'h-12 sm:h-14 w-[2.5px] bg-slate-800' : 'h-8 sm:h-10 w-[1.5px] bg-slate-600';
+        tickLine.className = `absolute top-0 ${tickHeight} -translate-x-1/2 rounded-full pointer-events-none transition-colors`;
+        tickLine.style.left = `${percent}%`;
+
+        const labelText = document.createElement('div');
+        labelText.id = `micro-tick-label-${i}`;
+        labelText.textContent = rulerTickLabels[i];
+        labelText.className = 'absolute bottom-1 -translate-x-1/2 font-mono font-bold text-xs sm:text-sm text-slate-500 pointer-events-none transition-all';
+        labelText.style.left = `${percent}%`;
+
+        microMarks.appendChild(tickLine);
+        microMarks.appendChild(labelText);
+      }
+
+      // 3. 綁定直尺拖曳與點擊
+      setupRulerInteractions();
+      updateRulerState(4, false);
+    }
+
+    function updateRulerState(newIndex, playSoundEffect = true) {
+      state.ruler.index = Math.max(0, Math.min(10, newIndex));
+      const idx = state.ruler.index;
+
+      const tenthsEl = document.getElementById('display-ruler-tenths');
+      const hundredthsEl = document.getElementById('display-ruler-hundredths');
+
+      if (idx === 10) {
+        tenthsEl.textContent = '6';
+        hundredthsEl.textContent = '0';
+      } else {
+        tenthsEl.textContent = '5';
+        hundredthsEl.textContent = idx.toString();
+      }
+
+      const needle = document.getElementById('pointer-needle-group');
+      if (needle) needle.style.left = `${idx * 10}%`;
+
+      // 刻度數字高亮
+      for (let i = 0; i <= 10; i++) {
+        const label = document.getElementById(`micro-tick-label-${i}`);
+        const line = document.getElementById(`micro-tick-line-${i}`);
+        if (label && line) {
+          if (i === idx) {
+            label.className = 'absolute bottom-1 -translate-x-1/2 font-mono font-black text-xs sm:text-base text-orange-600 scale-110 pointer-events-none transition-all';
+            line.classList.add('bg-orange-500');
+          } else {
+            label.className = 'absolute bottom-1 -translate-x-1/2 font-mono font-bold text-xs sm:text-sm text-slate-500 pointer-events-none transition-all';
+            line.classList.remove('bg-orange-500');
+          }
+        }
+      }
+
+      const btnPrev = document.getElementById('btn-ruler-prev');
+      const btnNext = document.getElementById('btn-ruler-next');
+      if (btnPrev) btnPrev.style.opacity = idx === 0 ? '0.4' : '1';
+      if (btnNext) btnNext.style.opacity = idx === 10 ? '0.4' : '1';
+
+      if (playSoundEffect) playSound('tick');
+    }
+
+    function stepRulerValue(delta) {
+      const target = state.ruler.index + delta;
+      if (target >= 0 && target <= 10) {
+        updateRulerState(target, true);
+      }
+    }
+
+    function setupRulerInteractions() {
+      const container = document.getElementById('micro-ruler-container');
+      const wrapper = document.getElementById('micro-ticks-wrapper');
+      const pin = document.getElementById('pointer-pin');
+      if (!container || !wrapper) return;
+
+      function getIndexFromClientX(clientX) {
+        const rect = wrapper.getBoundingClientRect();
+        const relativeX = clientX - rect.left;
+        const clampedRatio = Math.max(0, Math.min(1, relativeX / rect.width));
+        return Math.round(clampedRatio * 10);
+      }
+
+      container.addEventListener('pointerdown', (e) => {
+        state.ruler.isDragging = true;
+        const targetIndex = getIndexFromClientX(e.clientX);
+        if (targetIndex !== state.ruler.index) updateRulerState(targetIndex, true);
+        if (pin) pin.classList.add('cursor-grabbing');
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!state.ruler.isDragging) return;
+        const targetIndex = getIndexFromClientX(e.clientX);
+        if (targetIndex !== state.ruler.index) updateRulerState(targetIndex, true);
+      });
+
+      window.addEventListener('pointerup', () => {
+        if (state.ruler.isDragging) {
+          state.ruler.isDragging = false;
+          if (pin) pin.classList.remove('cursor-grabbing');
+        }
+      });
+
+      window.addEventListener('pointercancel', () => {
+        state.ruler.isDragging = false;
+        if (pin) pin.classList.remove('cursor-grabbing');
+      });
+    }
+
+    function updateRulerProjectionLines() {
+      const box = document.getElementById('macro-selection-box');
+      const ticksWrapper = document.getElementById('micro-ticks-wrapper');
+      const svg = document.getElementById('projection-svg');
+      if (!box || !ticksWrapper || !svg) return;
+
+      const svgRect = svg.getBoundingClientRect();
+      const bRect = box.getBoundingClientRect();
+      const tRect = ticksWrapper.getBoundingClientRect();
+
+      const x1 = bRect.left - svgRect.left;
+      const y1 = bRect.bottom - svgRect.top;
+      const x2 = bRect.right - svgRect.left;
+      const y2 = bRect.bottom - svgRect.top;
+
+      const x3 = tRect.right - svgRect.left;
+      const y3 = tRect.top - svgRect.top;
+      const x4 = tRect.left - svgRect.left;
+      const y4 = tRect.top - svgRect.top;
+
+      const polygon = document.getElementById('projection-polygon');
+      const lineLeft = document.getElementById('projection-line-left');
+      const lineRight = document.getElementById('projection-line-right');
+
+      if (polygon) polygon.setAttribute('points', `${x1},${y1} ${x2},${y2} ${x3},${y3} ${x4},${y4}`);
+      if (lineLeft) {
+        lineLeft.setAttribute('x1', x1); lineLeft.setAttribute('y1', y1);
+        lineLeft.setAttribute('x2', x4); lineLeft.setAttribute('y2', y4);
+      }
+      if (lineRight) {
+        lineRight.setAttribute('x1', x2); lineRight.setAttribute('y1', y2);
+        lineRight.setAttribute('x2', x3); lineRight.setAttribute('y2', y3);
+      }
+    }
+
+    /**
+     * ==========================================
+     * 5. 10x10 百格板邏輯 (Grid Blocks Logic)
+     * ==========================================
+     */
+    function initGridModule() {
+      const container = document.getElementById('grid-cells-container');
+      container.innerHTML = '';
+
+      for (let col = 0; col < 10; col++) {
+        const colWrapper = document.createElement('div');
+        colWrapper.id = `grid-col-${col}`;
+        colWrapper.className = 'flex flex-col gap-1 sm:gap-1.5 h-full w-full relative transition-all duration-200 rounded-md';
+
+        for (let row = 0; row < 10; row++) {
+          const idx = col * 10 + row;
+          const cell = document.createElement('div');
+          cell.id = `grid-cell-${idx}`;
+          cell.dataset.index = idx;
+          cell.className = 'w-full h-full rounded-sm sm:rounded-md grid-cell-empty cursor-pointer flex items-center justify-center';
+          colWrapper.appendChild(cell);
+        }
+        container.appendChild(colWrapper);
+      }
+
+      setupGridGestures(container);
+      renderGridUI();
+    }
+
+    function setupGridGestures(container) {
+      container.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        state.grid.isDragging = true;
+        const cell = getCellUnderPointer(e.clientX, e.clientY);
+        if (cell) {
+          const idx = parseInt(cell.dataset.index, 10);
+          state.grid.dragTargetValue = !state.grid.cells[idx];
+          applyGridCellChange(idx, state.grid.dragTargetValue);
+        }
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!state.grid.isDragging) return;
+        const cell = getCellUnderPointer(e.clientX, e.clientY);
+        if (cell) {
+          const idx = parseInt(cell.dataset.index, 10);
+          if (state.grid.cells[idx] !== state.grid.dragTargetValue) {
+            applyGridCellChange(idx, state.grid.dragTargetValue);
+          }
+        }
+      });
+
+      window.addEventListener('pointerup', () => { state.grid.isDragging = false; });
+      window.addEventListener('pointercancel', () => { state.grid.isDragging = false; });
+    }
+
+    function getCellUnderPointer(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (el && el.closest('[data-index]')) return el.closest('[data-index]');
+      return null;
+    }
+
+    function applyGridCellChange(index, fillState) {
+      if (state.grid.cells[index] === fillState) return;
+      state.grid.cells[index] = fillState;
+
+      const col = Math.floor(index / 10);
+      const colFilledCount = state.grid.cells.slice(col * 10, (col + 1) * 10).filter(Boolean).length;
+      if (fillState && colFilledCount === 10) {
+        playSound('strip');
+      } else {
+        playSound('cell');
+      }
+      renderGridUI();
+    }
+
+    function renderGridUI() {
+      const count = state.grid.cells.filter(Boolean).length;
+
+      const ones = count >= 100 ? 1 : 0;
+      const effectiveCount = count >= 100 ? 0 : count;
+      const tenths = Math.floor(effectiveCount / 10);
+      const hundredths = effectiveCount % 10;
+
+      document.getElementById('display-grid-ones').textContent = ones;
+      document.getElementById('display-grid-tenths').textContent = tenths;
+      document.getElementById('display-grid-hundredths').textContent = hundredths;
+
+      const hundredthsBox = document.getElementById('display-grid-hundredths-box');
+      if (state.grid.hideTrailingZero && hundredths === 0 && (tenths > 0 || ones > 0)) {
+        hundredthsBox.style.opacity = '0.15';
+        hundredthsBox.style.borderStyle = 'dashed';
+      } else {
+        hundredthsBox.style.opacity = '1';
+        hundredthsBox.style.borderStyle = 'solid';
+      }
+
+      // 滿 10 格整條變藍色
+      for (let col = 0; col < 10; col++) {
+        const colWrapper = document.getElementById(`grid-col-${col}`);
+        const colCells = state.grid.cells.slice(col * 10, (col + 1) * 10);
+        const isFullTenth = colCells.every(Boolean);
+
+        if (isFullTenth) {
+          if (colWrapper) {
+            colWrapper.className = 'flex flex-col gap-1 sm:gap-1.5 h-full w-full relative rounded-md transition-all duration-300 p-0.5 bg-blue-600/10 border border-blue-400/40';
+          }
+          for (let row = 0; row < 10; row++) {
+            const idx = col * 10 + row;
+            const cell = document.getElementById(`grid-cell-${idx}`);
+            if (cell) cell.className = 'w-full h-full rounded-sm sm:rounded-md grid-strip-blue transition-all duration-200';
+          }
+        } else {
+          if (colWrapper) {
+            colWrapper.className = 'flex flex-col gap-1 sm:gap-1.5 h-full w-full relative transition-all duration-300 rounded-md';
+          }
+          for (let row = 0; row < 10; row++) {
+            const idx = col * 10 + row;
+            const cell = document.getElementById(`grid-cell-${idx}`);
+            if (cell) {
+              if (state.grid.cells[idx]) {
+                cell.className = 'w-full h-full rounded-sm sm:rounded-md grid-cell-orange transition-all duration-150';
+              } else {
+                cell.className = 'w-full h-full rounded-sm sm:rounded-md grid-cell-empty transition-all duration-150';
+              }
+            }
+          }
+        }
+      }
+    }
+
+    function addGridOneCell() {
+      const nextEmpty = state.grid.cells.findIndex(c => !c);
+      if (nextEmpty !== -1) {
+        state.grid.cells[nextEmpty] = true;
+        const col = Math.floor(nextEmpty / 10);
+        const colFilled = state.grid.cells.slice(col * 10, (col + 1) * 10).filter(Boolean).length;
+        if (colFilled === 10) playSound('strip');
+        else playSound('cell');
+        renderGridUI();
+      }
+    }
+
+    function toggleGridTrailingZero() {
+      state.grid.hideTrailingZero = !state.grid.hideTrailingZero;
+      playSound('cell');
+
+      const btn = document.getElementById('btn-grid-toggle-zero');
+      if (state.grid.hideTrailingZero) {
+        btn.innerHTML = '<span>0.10</span><span class="text-slate-400 font-normal">⇋</span><span class="text-[#2563EB] underline decoration-2">0.1</span>';
+        btn.className = 'flex-1 max-w-[200px] h-13 sm:h-14 px-4 rounded-2xl bg-blue-50/80 border-2 border-blue-400 font-mono font-black text-sm sm:text-base text-slate-800 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all';
+      } else {
+        btn.innerHTML = '<span>0.10</span><span class="text-slate-400 font-normal">⇋</span><span class="text-[#2563EB]">0.1</span>';
+        btn.className = 'flex-1 max-w-[200px] h-13 sm:h-14 px-4 rounded-2xl bg-white border-2 border-slate-300 hover:border-blue-400 font-mono font-black text-sm sm:text-base text-slate-700 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all';
+      }
+      renderGridUI();
+    }
+
+    /**
+     * ==========================================
+     * 6. 頁面初始化
+     * ==========================================
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      initRulerModule();
+      initGridModule();
+      
+      // 更新投影導引線
+      requestAnimationFrame(updateRulerProjectionLines);
+      setTimeout(updateRulerProjectionLines, 80);
+      window.addEventListener('resize', updateRulerProjectionLines);
+    });
+  </script>
+</body>
+</html>
